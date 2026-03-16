@@ -1,0 +1,93 @@
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+from django.db import transaction
+from duties.models import Duty
+from .tasks import async_send_sms
+from .utils import create_dashboard_notification
+import logging
+import threading
+
+logger = logging.getLogger(__name__)
+
+@receiver(post_save, sender=Duty)
+def notify_duty_assignment(sender, instance, created, **kwargs):
+    """
+    Signal to notify user when a duty is assigned.
+    Includes idempotency check and transactional safety.
+    """
+    try:
+        logger.debug(f"Signal notify_duty_assignment triggered for Duty {instance.id}. Created: {created}, User: {instance.user_id}")
+        
+        shift_type = getattr(instance.schedule, 'shift_type', '') or ''
+        is_notifiable_type = shift_type.lower() in ['shift', 'on-call', 'on call']
+        
+        if instance.user and instance.schedule and is_notifiable_type:
+            logger.info(f"Triggering assignment notification for Duty {instance.id} (Type: {shift_type}, Created: {created})")
+            # Transactional Safety: Wait for the Duty save to be committed
+            transaction.on_commit(lambda: _handle_duty_assignment_notification(instance))
+        else:
+            reason = "No user" if not instance.user else "Not a 'Shift' type"
+            logger.debug(f"Skipping notification for Duty {instance.id} ({reason})")
+    except Exception as e:
+        logger.error(f"Error in notify_duty_assignment signal: {e}")
+
+def _handle_duty_assignment_notification(instance):
+    try:
+        from .models import SMSLog
+        from django.db import IntegrityError
+        
+        user = instance.user
+        if not user: return
+        
+        schedule = getattr(instance, 'schedule', None)
+        duty_name = schedule.name if schedule and hasattr(schedule, 'name') else "Duty"
+        
+        # Ensure date is available and formatted
+        duty_date = "Unknown Date"
+        if instance.date:
+            try:
+                duty_date = instance.date.strftime("%Y-%m-%d")
+            except Exception:
+                duty_date = str(instance.date)
+
+        # 1. SMS Notification logic
+        if getattr(user, 'phone_number', None):
+            full_name = getattr(user, 'full_name', user.username)
+            
+            chart_name = "Duty Chart"
+            if instance.duty_chart and instance.duty_chart.name:
+                chart_name = instance.duty_chart.name
+            
+            # Custom Message
+            office_name = instance.office.name if instance.office else "Unknown Office"
+            sms_message = f'Dear {full_name}, You have been assigned to "{chart_name}" at "{office_name}" for the "{duty_name}". Please visit dutychart.ntc.net.np for the detail.'
+            
+            # Idempotency: Try to create the SMSLog entry first
+            try:
+                log = SMSLog.objects.create(
+                    user=user,
+                    duty=instance,
+                    phone=user.phone_number,
+                    message=sms_message,
+                    reminder_type='ASSIGNMENT',
+                    status='pending'
+                )
+                
+                # If created, dispatch to Celery
+                def trigger_sms_task():
+                    try:
+                        async_send_sms.delay(user.phone_number, sms_message, user_id=user.id, log_id=log.id)
+                    except Exception as sms_err:
+                        logger.error(f"Failed to queue SMS (threaded) for user {user.id}: {sms_err}")
+
+                threading.Thread(target=trigger_sms_task, daemon=True).start()
+                logger.info(f"Queued assignment SMS for user {user.username}, duty {instance.id}")
+                
+            except IntegrityError:
+                # Already exists, skip sending again
+                logger.debug(f"Assignment SMS already sent/queued for user {user.username}, duty {instance.id}")
+                return
+        else:
+            logger.warning(f"User {user.username} has no phone number for SMS notification.")
+    except Exception as e:
+        logger.exception(f"Error in _handle_duty_assignment_notification for Duty {instance.id}")

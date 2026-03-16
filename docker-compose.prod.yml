@@ -1,0 +1,63 @@
+services:
+  # Backend (Django)
+  dcms-backend:
+    image: nexus.ntc.net.np/dutychart/dcms-backend:latest
+    container_name: dcms-backend
+    volumes:
+      - ./static_volume:/app/static
+      - ./media_volume:/app/media
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    depends_on:
+      - dcms-redis
+
+  # Redis Broker
+  dcms-redis:
+    image: redis:7-alpine
+    container_name: dcms-redis
+    ports:
+      - "6379:6379"
+
+  # Celery Worker
+  dcms-celery-worker:
+    image: nexus.ntc.net.np/dutychart/dcms-backend:latest
+    container_name: dcms-celery-worker
+    command: celery -A config worker --loglevel=info
+    volumes:
+      - ./static_volume:/app/static
+      - ./media_volume:/app/media
+    env_file:
+      - .env
+    depends_on:
+      - dcms-backend
+      - dcms-redis
+
+  # Celery Beat
+  dcms-celery-beat:
+    image: nexus.ntc.net.np/dutychart/dcms-backend:latest
+    container_name: dcms-celery-beat
+    command: celery -A config beat --loglevel=info
+    volumes:
+      - ./static_volume:/app/static
+      - ./media_volume:/app/media
+    env_file:
+      - .env
+    depends_on:
+      - dcms-backend
+      - dcms-redis
+
+  # Frontend (React + Nginx)
+  dcms-frontend:
+    image: nexus.ntc.net.np/dutychart/dcms-frontend:release-v1.0.1.2
+    container_name: dcms-frontend
+    ports:
+      - "80:80"
+    volumes:
+      - ./static_volume:/usr/share/nginx/html/static:ro
+      - ./media_volume:/usr/share/nginx/html/media:ro
+    env_file:
+      - .env
+    depends_on:
+      - dcms-backend
