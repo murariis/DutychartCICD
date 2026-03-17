@@ -166,7 +166,7 @@ pipeline {
             """
         }
         failure {
-            echo "❌ Pipeline failed at stage '${FAILED_STAGE}'. Check logs above."
+            echo "❌ Pipeline failed. Check logs above."
         }
         always {
             // Clean up local Docker images to keep Jenkins disk usage low
