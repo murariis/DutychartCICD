@@ -34,9 +34,7 @@ pipeline {
         // ── 1. Checkout ────────────────────────────────────────────────
         stage('Checkout') {
             steps {
-                git branch: 'main',
-                    credentialsId: 'github-ssh-key',
-                    url: 'git@github.com:murariis/DutychartCICD.git'
+                checkout scm
             }
         }
 
