@@ -1,5 +1,6 @@
 backend/celerybeat-schedule
 .env.docker
+.env
 frontend/.env
 backend/.env
 node_modules/

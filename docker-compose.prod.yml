@@ -1,11 +1,17 @@
+# Production compose file — used by the deploy server (172.16.61.118)
+# Jenkins sets IMAGE_TAG before calling "docker compose ... up"
+# Do NOT run "docker compose build" here — images come from Nexus.
+
 services:
-  # Backend (Django)
+
+  # ── Backend (Django + Gunicorn) ──────────────────────────────────────
   dcms-backend:
-    image: nexus.ntc.net.np/dutychart/dcms-backend:latest
+    image: nexus.ntc.net.np/dutychart/dcms-backend:${IMAGE_TAG:-latest}
     container_name: dcms-backend
+    restart: always
     volumes:
-      - ./static_volume:/app/static
-      - ./media_volume:/app/media
+      - static_volume:/app/static
+      - media_volume:/app/media
     ports:
       - "8000:8000"
     env_file:
@@ -13,51 +19,57 @@ services:
     depends_on:
       - dcms-redis
 
-  # Redis Broker
+  # ── Redis Broker ─────────────────────────────────────────────────────
   dcms-redis:
     image: redis:7-alpine
     container_name: dcms-redis
+    restart: always
     ports:
       - "6379:6379"
 
-  # Celery Worker
+  # ── Celery Worker ─────────────────────────────────────────────────────
   dcms-celery-worker:
-    image: nexus.ntc.net.np/dutychart/dcms-backend:latest
+    image: nexus.ntc.net.np/dutychart/dcms-backend:${IMAGE_TAG:-latest}
     container_name: dcms-celery-worker
+    restart: always
     command: celery -A config worker --loglevel=info
     volumes:
-      - ./static_volume:/app/static
-      - ./media_volume:/app/media
+      - static_volume:/app/static
+      - media_volume:/app/media
     env_file:
       - .env
     depends_on:
       - dcms-backend
       - dcms-redis
 
-  # Celery Beat
+  # ── Celery Beat ───────────────────────────────────────────────────────
   dcms-celery-beat:
-    image: nexus.ntc.net.np/dutychart/dcms-backend:latest
+    image: nexus.ntc.net.np/dutychart/dcms-backend:${IMAGE_TAG:-latest}
     container_name: dcms-celery-beat
+    restart: always
     command: celery -A config beat --loglevel=info
     volumes:
-      - ./static_volume:/app/static
-      - ./media_volume:/app/media
+      - static_volume:/app/static
+      - media_volume:/app/media
     env_file:
       - .env
     depends_on:
       - dcms-backend
       - dcms-redis
 
-  # Frontend (React + Nginx)
+  # ── Frontend (React/Vite + Nginx) ────────────────────────────────────
   dcms-frontend:
-    image: nexus.ntc.net.np/dutychart/dcms-frontend:release-v1.0.1.2
+    image: nexus.ntc.net.np/dutychart/dcms-frontend:${IMAGE_TAG:-latest}
     container_name: dcms-frontend
+    restart: always
     ports:
       - "80:80"
     volumes:
-      - ./static_volume:/usr/share/nginx/html/static:ro
-      - ./media_volume:/usr/share/nginx/html/media:ro
-    env_file:
-      - .env
+      - static_volume:/usr/share/nginx/html/static:ro
+      - media_volume:/usr/share/nginx/html/media:ro
     depends_on:
       - dcms-backend
+
+volumes:
+  static_volume:
+  media_volume:
