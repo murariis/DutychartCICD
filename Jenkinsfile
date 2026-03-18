@@ -25,8 +25,6 @@ pipeline {
         DEPLOY_SSH_ID   = "deploy-server-ssh"     // SSH private key
         DOT_ENV_ID      = "dutychart-dot-env"     // Secret file → .env on server
 
-        // Leave empty so frontend uses relative /api/* paths -> nginx proxies to backend
-        VITE_BACKEND_HOST = ""
     }
 
     stages {
@@ -58,7 +56,7 @@ pipeline {
                     steps {
                         sh """
                             docker build \
-                              --build-arg VITE_BACKEND_HOST="${VITE_BACKEND_HOST}" \
+                              --build-arg VITE_BACKEND_HOST="" \
                               -t ${FRONTEND_IMAGE}:${IMAGE_TAG} \
                               -t ${FRONTEND_IMAGE}:latest \
                               -f frontend/Dockerfile \
