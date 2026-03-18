@@ -6,7 +6,7 @@ services:
 
   # ── Backend (Django + Gunicorn) ──────────────────────────────────────
   dcms-backend:
-    image: nexus.ntc.net.np/dutychartCICD/dcms-backend:${IMAGE_TAG:-latest}
+    image: nexus.ntc.net.np/dutychart/dcms-backend:${IMAGE_TAG:-latest}
     container_name: dcms-backend
     restart: always
     volumes:
@@ -29,7 +29,7 @@ services:
 
   # ── Celery Worker ─────────────────────────────────────────────────────
   dcms-celery-worker:
-    image: nexus.ntc.net.np/dutychartCICD/dcms-backend:${IMAGE_TAG:-latest}
+    image: nexus.ntc.net.np/dutychart/dcms-backend:${IMAGE_TAG:-latest}
     container_name: dcms-celery-worker
     restart: always
     command: celery -A config worker --loglevel=info
@@ -44,7 +44,7 @@ services:
 
   # ── Celery Beat ───────────────────────────────────────────────────────
   dcms-celery-beat:
-    image: nexus.ntc.net.np/dutychartCICD/dcms-backend:${IMAGE_TAG:-latest}
+    image: nexus.ntc.net.np/dutychart/dcms-backend:${IMAGE_TAG:-latest}
     container_name: dcms-celery-beat
     restart: always
     command: celery -A config beat --loglevel=info
@@ -59,7 +59,7 @@ services:
 
   # ── Frontend (React/Vite + Nginx) ────────────────────────────────────
   dcms-frontend:
-    image: nexus.ntc.net.np/dutychartCICD/dcms-frontend:${IMAGE_TAG:-latest}
+    image: nexus.ntc.net.np/dutychart/dcms-frontend:${IMAGE_TAG:-latest}
     container_name: dcms-frontend
     restart: always
     ports:

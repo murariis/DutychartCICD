@@ -7,7 +7,7 @@ pipeline {
     environment {
         // Nexus Docker registry  (no http://, just host:port)
         NEXUS_REGISTRY  = "nexus.ntc.net.np"
-        PROJECT         = "dutychartCICD"
+        PROJECT         = "dutychart"
 
         // Image names (must match docker-compose.prod.yml)
         BACKEND_IMAGE   = "${NEXUS_REGISTRY}/${PROJECT}/dcms-backend"
