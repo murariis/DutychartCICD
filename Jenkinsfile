@@ -7,7 +7,7 @@ pipeline {
     environment {
         // Nexus Docker registry  (no http://, just host:port)
         NEXUS_REGISTRY  = "nexus.ntc.net.np"
-        PROJECT         = "dutychart"
+        PROJECT         = "dutychartCICD"
 
         // Image names (must match docker-compose.prod.yml)
         BACKEND_IMAGE   = "${NEXUS_REGISTRY}/${PROJECT}/dcms-backend"
@@ -77,20 +77,20 @@ pipeline {
                     usernameVariable: 'NEXUS_USER',
                     passwordVariable: 'NEXUS_PASS'
                 )]) {
-                    sh """
-                        echo "${NEXUS_PASS}" | docker login ${NEXUS_REGISTRY} \
-                            -u "${NEXUS_USER}" --password-stdin
+                    sh '''
+                        echo "$NEXUS_PASS" | docker login $NEXUS_REGISTRY \
+                            -u "$NEXUS_USER" --password-stdin
 
                         # Push backend (versioned + latest)
-                        docker push ${BACKEND_IMAGE}:${IMAGE_TAG}
-                        docker push ${BACKEND_IMAGE}:latest
+                        docker push $BACKEND_IMAGE:$IMAGE_TAG
+                        docker push $BACKEND_IMAGE:latest
 
                         # Push frontend (versioned + latest)
-                        docker push ${FRONTEND_IMAGE}:${IMAGE_TAG}
-                        docker push ${FRONTEND_IMAGE}:latest
+                        docker push $FRONTEND_IMAGE:$IMAGE_TAG
+                        docker push $FRONTEND_IMAGE:latest
 
-                        docker logout ${NEXUS_REGISTRY}
-                    """
+                        docker logout $NEXUS_REGISTRY
+                    '''
                 }
             }
         }
@@ -114,42 +114,43 @@ pipeline {
                         variable: 'ENV_FILE'
                     )
                 ]) {
-                    sh """
+                    sh '''
                         # Upload files to server
-                        scp -i ${SSH_KEY} -o StrictHostKeyChecking=no \
-                            ${ENV_FILE} \
-                            ${DEPLOY_USER}@${DEPLOY_HOST}:/opt/dutychart/.env
+                        scp -i "$SSH_KEY" -o StrictHostKeyChecking=no \
+                            "$ENV_FILE" \
+                            $DEPLOY_USER@$DEPLOY_HOST:/opt/dutychart/.env
 
-                        scp -i ${SSH_KEY} -o StrictHostKeyChecking=no \
+                        scp -i "$SSH_KEY" -o StrictHostKeyChecking=no \
                             docker-compose.prod.yml \
-                            ${DEPLOY_USER}@${DEPLOY_HOST}:/opt/dutychart/docker-compose.prod.yml
+                            $DEPLOY_USER@$DEPLOY_HOST:/opt/dutychart/docker-compose.prod.yml
 
-                        # SSH in and deploy
-                        ssh -i ${SSH_KEY} -o StrictHostKeyChecking=no \
-                            ${DEPLOY_USER}@${DEPLOY_HOST} '
-                                set -e
-                                cd /opt/dutychart
+                        # SSH in and deploy (heredoc lets the Jenkins shell expand secrets
+                        # before sending the script to the remote server)
+                        ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no \
+                            $DEPLOY_USER@$DEPLOY_HOST bash -s << REMOTE_EOF
+set -e
+cd /opt/dutychart
 
-                                # Login to Nexus on the server
-                                echo "${NEXUS_PASS}" | docker login ${NEXUS_REGISTRY} \
-                                    -u "${NEXUS_USER}" --password-stdin
+# Login to Nexus on the server
+echo "$NEXUS_PASS" | docker login $NEXUS_REGISTRY \\
+    -u "$NEXUS_USER" --password-stdin
 
-                                # Export the image tag so docker-compose.prod.yml can use it
-                                export IMAGE_TAG=${IMAGE_TAG}
+# Export the image tag so docker-compose.prod.yml can use it
+export IMAGE_TAG="$IMAGE_TAG"
 
-                                # Pull new images
-                                docker compose -f docker-compose.prod.yml pull
+# Pull new images
+docker compose -f docker-compose.prod.yml pull
 
-                                # Recreate only changed containers (zero-downtime for others)
-                                docker compose -f docker-compose.prod.yml up -d --remove-orphans
+# Recreate only changed containers (zero-downtime for others)
+docker compose -f docker-compose.prod.yml up -d --remove-orphans
 
-                                # Logout from registry
-                                docker logout ${NEXUS_REGISTRY}
+# Logout from registry
+docker logout $NEXUS_REGISTRY
 
-                                # Remove dangling images to free disk space
-                                docker image prune -f
-                            '
-                    """
+# Remove dangling images to free disk space
+docker image prune -f
+REMOTE_EOF
+                    '''
                 }
             }
         }
@@ -170,12 +171,12 @@ pipeline {
         }
         always {
             // Clean up local Docker images to keep Jenkins disk usage low
-            sh """
-                docker rmi ${BACKEND_IMAGE}:${IMAGE_TAG}  || true
-                docker rmi ${FRONTEND_IMAGE}:${IMAGE_TAG} || true
-                docker rmi ${BACKEND_IMAGE}:latest        || true
-                docker rmi ${FRONTEND_IMAGE}:latest       || true
-            """
+            sh '''
+                docker rmi $BACKEND_IMAGE:$IMAGE_TAG  || true
+                docker rmi $FRONTEND_IMAGE:$IMAGE_TAG || true
+                docker rmi $BACKEND_IMAGE:latest        || true
+                docker rmi $FRONTEND_IMAGE:latest       || true
+            '''
         }
     }
 }
