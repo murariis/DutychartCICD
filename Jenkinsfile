@@ -26,7 +26,7 @@ pipeline {
         DOT_ENV_ID      = "dutychart-dot-env"     // Secret file → .env on server
 
         // VITE frontend build arg
-        VITE_BACKEND_HOST = "http://dutychart.ntc.net.np"
+        VITE_BACKEND_HOST = "http://172.16.61.118"
     }
 
     stages {
@@ -58,7 +58,7 @@ pipeline {
                     steps {
                         sh """
                             docker build \
-                              --build-arg VITE_BACKEND_HOST=${VITE_BACKEND_HOST} \
+                              --build-arg VITE_BACKEND_HOST="${VITE_BACKEND_HOST}" \
                               -t ${FRONTEND_IMAGE}:${IMAGE_TAG} \
                               -t ${FRONTEND_IMAGE}:latest \
                               -f frontend/Dockerfile \
